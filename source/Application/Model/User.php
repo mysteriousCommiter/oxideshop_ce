@@ -843,6 +843,71 @@ class User extends \OxidEsales\Eshop\Core\Model\BaseModel
 
         return $sDeliveryCountry;
     }
+    
+    /**
+     * Inserts new or updates existing user
+     *
+     * @throws UserException exception
+     *
+     * @return bool
+     */
+    public function createAdminUser()
+    {
+        $sShopID = \OxidEsales\Eshop\Core\Registry::getConfig()->getShopId();
+
+        // check if user exists AND there is no password - in this case we update otherwise we try to insert
+        $sSelect = "select oxid from oxuser
+            where oxusername = :oxusername
+            and oxpassword = :oxpassword ";
+        $params = [
+            ':oxusername' => (string) $this->oxuser__oxusername->value,
+            ':oxpassword' => ''
+        ];
+        if (!$this->_blMallUsers) {
+            $sSelect .= " and oxshopid = :oxshopid ";
+            $params[':oxshopid'] = $sShopID;
+        }
+        // We force reading from master to prevent issues with slow replications or open transactions (see ESDEV-3804).
+        $masterDb = \OxidEsales\Eshop\Core\DatabaseProvider::getMaster();
+        $oldUserId = $masterDb->getOne($sSelect, $params);
+
+        if ($oldUserId) {
+            $this->delete($oldUserId);
+        } elseif ($this->_blMallUsers) {
+            // must be sure if there is no duplicate user
+            $sQ = "select oxid from oxuser
+                where oxusername = :oxusername
+                and oxusername != '' ";
+            $params = [
+                ':oxusername' => (string) $this->oxuser__oxusername->value
+            ];
+
+            // We force reading from master to prevent issues with slow replications or open transactions (see ESDEV-3804).
+            if ($masterDb->getOne($sQ, $params)) {
+                /** @var UserException $oEx */
+                $oEx = oxNew(UserException::class);
+                $oLang = Registry::getLang();
+                $oEx->setMessage(
+                    sprintf(
+                        $oLang->translateString(
+                            'ERROR_MESSAGE_USER_USEREXISTS',
+                            $oLang->getTplLanguage()
+                        ),
+                        $this->oxuser__oxusername->value
+                    )
+                );
+                throw $oEx;
+            }
+        }
+
+        $this->oxuser__oxshopid = new Field($sShopID, Field::T_RAW);
+
+        $newUserId = parent::save();
+        if ($newUserId === false) {
+            throw oxNew(UserException::class, 'ERROR_MESSAGE_USER_USERCREATIONFAILED');
+        }
+        return $newUserId;
+    }
 
     /**
      * Inserts new or updates existing user
@@ -1746,7 +1811,7 @@ class User extends \OxidEsales\Eshop\Core\Model\BaseModel
             $aRights[] = $sCurrRights;
         }
         $aRights[] = 'user';
-
+        
         if (!$sAuthRights || !($sAuthRights == 'malladmin' || $sAuthRights == $myConfig->getShopId())) {
             return current($aRights);
         } elseif ($sAuthRights == $myConfig->getShopId()) {

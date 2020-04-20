@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace OxidEsales\EshopCommunity\Tests\Integration\Price;
 
 use DateTime;
-use oxcmp_user;
 use OxidEsales\Eshop\Application\Model\Article;
 use OxidEsales\Eshop\Application\Model\Basket;
 use OxidEsales\Eshop\Application\Model\Object2Group;
@@ -21,9 +20,8 @@ use OxidEsales\Eshop\Application\Model\VoucherSerie;
 use OxidEsales\Eshop\Core\Model\BaseModel;
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\Eshop\Core\ShopIdCalculator;
-use OxidTestCase;
 
-final class VouchersTest extends OxidTestCase
+final class VouchersUserAndProductBindingTest extends BaseTestCase
 {
     private const FIRST_VOUCHER_ID = 'testId1';
     private const SECOND_VOUCHER_ID = 'testId2';
@@ -35,35 +33,108 @@ final class VouchersTest extends OxidTestCase
     protected function setUp(): void
     {
         $this->createUser();
-
         $this->createVoucherSeries();
-
-        $this->createFistVoucher();
-        $this->addVoucherSeriesToUserGroup();
-
-        $this->createSecondVoucher();
-
-        $this->addVoucherToSpecificProduct(self::FIRST_VOUCHER_ID,self::FIRST_ARTICLE);
-        $this->addVoucherToSpecificProduct(self::SECOND_VOUCHER_ID,self::FIRST_ARTICLE);
-        $this->addVoucherToSpecificProduct(self::FIRST_VOUCHER_ID,self::SECOND_ARTICLE);
-        $this->addVoucherToSpecificProduct(self::SECOND_VOUCHER_ID,self::SECOND_ARTICLE);
+        $this->createVouchers();
+        parent::setUp();
     }
 
     protected function tearDown(): void
     {
-        $this->cleanUpTable("oxvouchers");
-        $this->cleanUpTable("oxvoucherseries");
-        $this->cleanUpTable("oxobject2discount");
-        $this->cleanUpTable("oxobject2group");
         parent::tearDown();
     }
 
-    public function testVouchersForSpecificCategoriesAndProducts(): void
+    public function testIfVoucherWorksWithNotAssignedProducts(): void
     {
-        $this->checkVoucherWithoutLogin();
-        $basket = $this->checkVoucherWithUserLogin();
-        $basket = $this->checkIfVoucherCalculateOnce($basket);
-        $this->checkMultipleVouchersInSameUserGroup($basket);
+        $this->assignVoucherToSpecificProduct(self::VOUCHER_SERIES_ID, self::SECOND_ARTICLE);
+
+        $basket = oxNew(Basket::class);
+        $basket->addToBasket(self::FIRST_ARTICLE, 1);
+
+        $basket->calculateBasket(true);
+        $this->assertSame(11.76, $basket->getNettoSum());
+
+        // voucher is not working because it is not assigned to this article
+        $basket->addVoucher(self::FIRST_VOUCHER_ID);
+        $basket->calculateBasket(true);
+        $this->assertSame(11.76, $basket->getNettoSum());
+
+        // reset basket and test voucher with correct article
+        $basket->deleteBasket();
+        $basket->addToBasket(self::SECOND_ARTICLE, 1);
+
+        $basket->calculateBasket(true);
+        $this->assertSame(5.04, $basket->getNettoSum());
+
+        $basket->addVoucher(self::FIRST_VOUCHER_ID);
+        $basket->calculateBasket(true);
+        $this->assertSame(5.04, $basket->getNettoSum());
+    }
+
+    public function testVoucherIfAssignedToSpecificUserGroup(): void
+    {
+        $this->assignVoucherSeriesToUserGroup();
+
+        // If user not login yet voucher should not work
+        $basket = oxNew(Basket::class);
+        $basket->addToBasket(self::FIRST_ARTICLE, 1);
+
+        $basket->calculateBasket(true);
+        $this->assertSame(11.76, $basket->getNettoSum());
+
+        $basket->addVoucher(self::FIRST_VOUCHER_ID);
+        $basket->calculateBasket(true);
+        $this->assertSame(11.76, $basket->getNettoSum());
+
+
+        $this->loginUser();
+
+        // After login voucher should work and reduce the basket price
+
+        $basket = oxNew(Basket::class);
+        $basket->addToBasket(self::FIRST_ARTICLE, 1);
+        $basket->addVoucher(self::FIRST_VOUCHER_ID);
+
+        // test if voucher works after login because it is belong to this user group
+        $basket->calculateBasket(true);
+        $this->assertSame(7.56, $basket->getNettoSum());
+    }
+
+    public function testIfVoucherOnlyApplyOnce(): void
+    {
+        $this->loginUser();
+
+        $basket = oxNew(Basket::class);
+        $basket->addToBasket(self::FIRST_ARTICLE, 1);
+
+        // Add voucher one more time
+        $basket->addVoucher(self::FIRST_VOUCHER_ID);
+
+        $basket->calculateBasket(true);
+        $this->assertSame(7.56, $basket->getNettoSum());
+    }
+
+    public function testIfMultipleVoucherApplyInSameUserGroup(): void
+    {
+        $this->loginUser();
+
+        $basket = oxNew(Basket::class);
+        $basket->addToBasket(self::FIRST_ARTICLE, 1);
+        $basket->addToBasket(self::SECOND_ARTICLE, 1);
+
+        $basket->calculateBasket(true);
+        $this->assertSame(16.81, $basket->getNettoSum());
+
+
+        // Add first Voucher
+        $basket->addVoucher(self::FIRST_VOUCHER_ID);
+        $basket->calculateBasket(true);
+        $this->assertSame(12.61, $basket->getNettoSum());
+
+        // Add second voucher
+        $basket->addVoucher(self::SECOND_VOUCHER_ID);
+
+        $basket->calculateBasket(true);
+        $this->assertSame(8.4, $basket->getNettoSum());
     }
 
     private function createVoucherSeries(): void
@@ -85,17 +156,14 @@ final class VouchersTest extends OxidTestCase
         $voucherSeries->oxvoucherseries__oxcalculateonce = new Field('1');
         $voucherSeries->save();
     }
-    private function createFistVoucher(): void
+    private function createVouchers(): void
     {
         $voucher = oxNew(Voucher::class);
         $voucher->setId(self::FIRST_VOUCHER_ID);
         $voucher->oxvouchers__oxvouchernr = new Field(self::FIRST_VOUCHER_ID);
         $voucher->oxvouchers__oxvoucherserieid = new Field(self::VOUCHER_SERIES_ID);
         $voucher->save();
-    }
 
-    private function createSecondVoucher(): void
-    {
         $voucher = oxNew(Voucher::class);
         $voucher->setId(self::SECOND_VOUCHER_ID);
         $voucher->oxvouchers__oxvouchernr = new Field(self::SECOND_VOUCHER_ID);
@@ -149,7 +217,7 @@ final class VouchersTest extends OxidTestCase
         return $user;
     }
 
-    private function addVoucherSeriesToUserGroup(): void
+    private function assignVoucherSeriesToUserGroup(): void
     {
         $group = oxNew(Object2Group::class);
         $group->oxobject2group__oxid = substr_replace(Registry::getUtilsObject()->generateUId(), '_', 0, 1);
@@ -164,90 +232,22 @@ final class VouchersTest extends OxidTestCase
      * @param string $articleId
      *
      */
-    private function addVoucherToSpecificProduct(string $voucherId, string $articleId): void
+    private function assignVoucherToSpecificProduct(string $voucherId, string $articleId): void
     {
         $object2Discount = oxNew(BaseModel::class);
         $object2Discount->init('oxobject2discount');
         $object2Discount->oxobject2discount__oxdiscountid = new Field($voucherId);
         $object2Discount->oxobject2discount__oxobjectid = new Field($articleId);
-        $object2Discount->oxobject2discount__oxtype = new Field(Article::class);
+        $object2Discount->oxobject2discount__oxtype = new Field('oxarticles');
 
         $object2Discount->save();
     }
 
-    /**
-     *
-     * @return string
-     */
-    private function loginUser(): string
+    private function loginUser(): void
     {
-        $this->setRequestParameter('lgn_usr', 'testuser@oxideshop.dev');
-        $this->setRequestParameter('lgn_pwd', 'asdfasdf');
+        $_POST['lgn_usr'] = 'testuser@oxideshop.dev';
+        $_POST['lgn_pwd'] = 'asdfasdf';
         $oCmpUser = oxNew('oxcmp_user');
-        return $oCmpUser->login();
+        $oCmpUser->login();
     }
-
-    private function checkVoucherWithoutLogin(): void
-    {
-        $basket = oxNew(Basket::class);
-        $basket->addToBasket(self::FIRST_ARTICLE, 1);
-
-        $basket->calculateBasket(true);
-        $this->assertSame(11.76, $basket->getNettoSum());
-
-        // test if voucher works without user login
-
-        $basket->addVoucher(self::FIRST_VOUCHER_ID);
-        $basket->calculateBasket(true);
-        // it is not working because voucher bind to specific user
-        $this->assertSame(11.76, $basket->getNettoSum());
-    }
-
-    private function checkVoucherWithUserLogin(): Basket
-    {
-        $this->loginUser();
-
-        $basket = oxNew(Basket::class);
-        $basket->addToBasket(self::FIRST_ARTICLE, 1);
-        $basket->addVoucher(self::FIRST_VOUCHER_ID);
-
-        // test if voucher works after login because it is belong to this user group
-        $basket->calculateBasket(true);
-        $this->assertSame(7.56, $basket->getNettoSum());
-
-        return $basket;
-    }
-
-    private function checkIfVoucherCalculateOnce(Basket $basket): Basket
-    {
-        // Add voucher one more time
-        $basket->addVoucher(self::FIRST_VOUCHER_ID);
-
-        $basket->calculateBasket(true);
-        $this->assertSame(7.56, $basket->getNettoSum());
-
-        return $basket;
-    }
-
-    private function checkMultipleVouchersInSameUserGroup(Basket $basket): Basket
-    {
-        $basket->addToBasket(self::SECOND_ARTICLE,1);
-
-        $basket->calculateBasket(true);
-        $this->assertSame(12.61, $basket->getNettoSum());
-
-        // Add second product
-        $basket->addToBasket(self::SECOND_ARTICLE, 1);
-        $basket->calculateBasket(true);
-        $this->assertSame(17.65, $basket->getNettoSum());
-
-        // Add second voucher
-        $basket->addVoucher(self::SECOND_VOUCHER_ID);
-
-        $basket->calculateBasket(true);
-        $this->assertSame(13.45, $basket->getNettoSum());
-
-        return $basket;
-    }
-
 }

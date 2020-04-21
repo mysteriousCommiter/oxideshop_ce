@@ -41,24 +41,40 @@ class AdminUserService
         $this->shopAdapter = $shopAdapter;
     }
 
-    /**
-     * @param string $userName
-     * @param string $password
-     * @param string $rights
-     * @param string $shopId
-     */
     public function createAdmin(
         string $userName,
         string $password,
         string $rights = RightsValueObject::MALL_ADMIN,
-        ?string $shopId = null
+        ?int $shopId = null
     ) {
-        $this->adminDao->create(Admin::fromUser(
+        $this->adminDao->create(Admin::fromUserInput(
             $this->shopAdapter->generateUniqueId(),
             UserNameValueObject::fromUserInput($userName),
             PasswordValueObject::fromUserInput($password),
             RightsValueObject::fromUserInput($rights),
-            (int)$shopId ?? 1
+            $shopId ?? 1
         ));
+    }
+
+    public function getAdminByEmail(string $email): Admin
+    {
+        return $this->adminDao->findByEmail(
+            UserNameValueObject::fromUserInput($email)
+        );
+    }
+
+    /**
+     * @param string $userName aka email
+     * @param string $rights shopId of the shop the user should be admin or malladmin
+     */
+    public function updateToAdmin(
+        string $userName,
+        string $rights = RightsValueObject::MALL_ADMIN
+    ) {
+        $newAdmin = $this->getAdminByEmail($userName);
+
+        $this->adminDao->update(
+            $newAdmin->withNewRights(RightsValueObject::fromUserInput($rights))
+        );
     }
 }

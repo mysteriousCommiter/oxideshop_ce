@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OxidEsales\EshopCommunity\Internal\Domain\Admin\Dao;
 
 use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\Admin;
+use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\UserNameValueObject;
 
 interface AdminDaoInterface
 {
@@ -22,4 +23,9 @@ interface AdminDaoInterface
      * @param Admin $admin
      */
     public function update(Admin $admin);
+
+    /**
+     * @param UserNameValueObject $email
+     */
+    public function findByEmail(UserNameValueObject $email): Admin;
 }

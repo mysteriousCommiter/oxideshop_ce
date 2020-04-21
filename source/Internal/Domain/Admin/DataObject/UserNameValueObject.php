@@ -1,9 +1,9 @@
 <?php
 
 /**
-* Copyright © OXID eSales AG. All rights reserved.
-* See LICENSE file for license details.
-*/
+ * Copyright © OXID eSales AG. All rights reserved.
+ * See LICENSE file for license details.
+ */
 
 declare(strict_types=1);
 
@@ -13,7 +13,10 @@ use OxidEsales\EshopCommunity\Internal\Domain\Email\EmailValidatorService;
 
 class UserNameValueObject
 {
-    private string $userName;
+    /**
+     * @var string
+     */
+    private $userName;
 
     private function __construct(string $userName)
     {
@@ -23,11 +26,17 @@ class UserNameValueObject
     public static function fromUserInput(string $userName): self
     {
         if (!EmailValidatorService::isEmailValid($userName)) {
-            throw new InvalidArgumentException();
+            throw new \InvalidArgumentException();
         }
 
         return new self($userName);
     }
+
+    public static function fromDb(string $userName): self
+    {
+        return new self($userName);
+    }
+
 
     public function __toString()
     {

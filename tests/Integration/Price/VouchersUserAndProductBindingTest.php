@@ -12,6 +12,7 @@ namespace OxidEsales\EshopCommunity\Tests\Integration\Price;
 use DateTime;
 use OxidEsales\Eshop\Application\Model\Article;
 use OxidEsales\Eshop\Application\Model\Basket;
+use OxidEsales\Eshop\Application\Model\Category;
 use OxidEsales\Eshop\Application\Model\Object2Group;
 use OxidEsales\Eshop\Application\Model\User;
 use OxidEsales\Eshop\Application\Model\Voucher;
@@ -20,21 +21,46 @@ use OxidEsales\Eshop\Application\Model\VoucherSerie;
 use OxidEsales\Eshop\Core\Model\BaseModel;
 use OxidEsales\Eshop\Core\Registry;
 use OxidEsales\Eshop\Core\ShopIdCalculator;
+use OxidEsales\TestingLibrary\UnitTestCase;
 
-final class VouchersUserAndProductBindingTest extends BaseTestCase
+final class VouchersUserAndProductBindingTest extends UnitTestCase
 {
     private const FIRST_VOUCHER_ID = 'testId1';
     private const SECOND_VOUCHER_ID = 'testId2';
-    private const VOUCHER_SERIES_ID = 'testSeries';
-    private const FIRST_ARTICLE = '1951'; // price: 14.0
-    private const SECOND_ARTICLE = '1952'; // price: 6.0
+    private const THIRD_VOUCHER_ID = 'testId3';
+    private const FIRST_VOUCHER_SERIES_ID = 'testSeries1';
+    private const SECOND_VOUCHER_SERIES_ID = 'testSeries1';
+    private const FIRST_ARTICLE_ID = '101';
+    private const SECOND_ARTICLE_ID = '102';
+    private const THIRD_ARTICLE_ID = '103';
     private const GROUP_ID = 'oxidnewcustomer';
+    private const FIRST_TEST_CATEGORY_ID = 'testCatId1';
+    private const SECOND_TEST_CATEGORY_ID = 'testCatId2';
 
     protected function setUp(): void
     {
+        $this->createCategory(self::FIRST_TEST_CATEGORY_ID, 'Test Title 1');
+        $this->createCategory(self::SECOND_TEST_CATEGORY_ID, 'Test Title 2');
+
+        $this->createArticle(self::FIRST_ARTICLE_ID, 14);
+        $this->addArticleToCategory(self::FIRST_ARTICLE_ID, self::FIRST_TEST_CATEGORY_ID);
+
+        $this->createArticle(self::SECOND_ARTICLE_ID, 6);
+        $this->addArticleToCategory(self::SECOND_ARTICLE_ID, self::FIRST_TEST_CATEGORY_ID);
+
+        $this->createArticle(self::THIRD_ARTICLE_ID, 10);
+        $this->addArticleToCategory(self::THIRD_ARTICLE_ID, self::SECOND_TEST_CATEGORY_ID);
+
         $this->createUser();
-        $this->createVoucherSeries();
-        $this->createVouchers();
+        $this->createVoucherSeries(self::FIRST_VOUCHER_SERIES_ID, 5);
+        $this->addVoucherToSeries(self::FIRST_VOUCHER_ID, self::FIRST_VOUCHER_SERIES_ID);
+        $this->addVoucherToSeries(self::SECOND_VOUCHER_ID, self::FIRST_VOUCHER_SERIES_ID);
+        $this->assignVoucherToCategory(self::FIRST_VOUCHER_SERIES_ID, self::FIRST_TEST_CATEGORY_ID);
+
+        $this->createVoucherSeries(self::SECOND_VOUCHER_SERIES_ID, 10);
+        $this->addVoucherToSeries(self::THIRD_VOUCHER_ID, self::SECOND_VOUCHER_SERIES_ID);
+        $this->assignVoucherToCategory(self::SECOND_VOUCHER_SERIES_ID, self::SECOND_TEST_CATEGORY_ID);
+
         parent::setUp();
     }
 
@@ -43,40 +69,32 @@ final class VouchersUserAndProductBindingTest extends BaseTestCase
         parent::tearDown();
     }
 
-    public function testIfVoucherWorksWithNotAssignedProducts(): void
+    public function testIfVoucherNotWorkingOnlyWithAssignCategories(): void
     {
-        $this->assignVoucherToSpecificProduct(self::VOUCHER_SERIES_ID, self::SECOND_ARTICLE);
-
         $basket = oxNew(Basket::class);
-        $basket->addToBasket(self::FIRST_ARTICLE, 1);
+        $basket->addToBasket(self::FIRST_ARTICLE_ID, 1);
 
         $basket->calculateBasket(true);
         $this->assertSame(11.76, $basket->getNettoSum());
 
-        // voucher is not working because it is not assigned to this article
-        $basket->addVoucher(self::FIRST_VOUCHER_ID);
+        $basket->addVoucher(self::THIRD_VOUCHER_ID);
+
         $basket->calculateBasket(true);
         $this->assertSame(11.76, $basket->getNettoSum());
 
-        // reset basket and test voucher with correct article
-        $basket->deleteBasket();
-        $basket->addToBasket(self::SECOND_ARTICLE, 1);
-
-        $basket->calculateBasket(true);
-        $this->assertSame(5.04, $basket->getNettoSum());
-
         $basket->addVoucher(self::FIRST_VOUCHER_ID);
+
         $basket->calculateBasket(true);
-        $this->assertSame(5.04, $basket->getNettoSum());
+        $this->assertSame(7.56, $basket->getNettoSum());
     }
 
     public function testVoucherIfAssignedToSpecificUserGroup(): void
     {
-        $this->assignVoucherSeriesToUserGroup();
+        $this->assignVoucherSeriesToUserGroup(self::FIRST_VOUCHER_SERIES_ID);
 
         // If user not login yet voucher should not work
         $basket = oxNew(Basket::class);
-        $basket->addToBasket(self::FIRST_ARTICLE, 1);
+        $basket->addToBasket(self::FIRST_ARTICLE_ID, 1);
 
         $basket->calculateBasket(true);
         $this->assertSame(11.76, $basket->getNettoSum());
@@ -91,7 +109,7 @@ final class VouchersUserAndProductBindingTest extends BaseTestCase
         // After login voucher should work and reduce the basket price
 
         $basket = oxNew(Basket::class);
-        $basket->addToBasket(self::FIRST_ARTICLE, 1);
+        $basket->addToBasket(self::FIRST_ARTICLE_ID, 1);
         $basket->addVoucher(self::FIRST_VOUCHER_ID);
 
         // test if voucher works after login because it is belong to this user group
@@ -99,18 +117,21 @@ final class VouchersUserAndProductBindingTest extends BaseTestCase
         $this->assertSame(7.56, $basket->getNettoSum());
     }
 
-    public function testIfVoucherOnlyApplyOnce(): void
+    public function testIfVoucherApplyOnlyForOneProductInTheBasket(): void
     {
         $this->loginUser();
 
         $basket = oxNew(Basket::class);
-        $basket->addToBasket(self::FIRST_ARTICLE, 1);
+        $basket->addToBasket(self::FIRST_ARTICLE_ID, 1);
 
-        // Add voucher one more time
         $basket->addVoucher(self::FIRST_VOUCHER_ID);
 
         $basket->calculateBasket(true);
         $this->assertSame(7.56, $basket->getNettoSum());
+
+        $basket->addToBasket(self::SECOND_ARTICLE_ID, 1);
+        $basket->calculateBasket(true);
+        $this->assertSame(12.61, $basket->getNettoSum());
     }
 
     public function testIfMultipleVoucherApplyInSameUserGroup(): void
@@ -118,8 +139,8 @@ final class VouchersUserAndProductBindingTest extends BaseTestCase
         $this->loginUser();
 
         $basket = oxNew(Basket::class);
-        $basket->addToBasket(self::FIRST_ARTICLE, 1);
-        $basket->addToBasket(self::SECOND_ARTICLE, 1);
+        $basket->addToBasket(self::FIRST_ARTICLE_ID, 1);
+        $basket->addToBasket(self::SECOND_ARTICLE_ID, 1);
 
         $basket->calculateBasket(true);
         $this->assertSame(16.81, $basket->getNettoSum());
@@ -137,15 +158,15 @@ final class VouchersUserAndProductBindingTest extends BaseTestCase
         $this->assertSame(8.4, $basket->getNettoSum());
     }
 
-    private function createVoucherSeries(): void
+    private function createVoucherSeries(string $seriesId, int $discount): void
     {
         $startDate = (new DateTime())->modify('-1 day')->format('Y-m-d 00:00:00');
         $endDate = (new DateTime())->modify('+1 day')->format('Y-m-d 00:00:00');
 
         $voucherSeries = oxNew(VoucherSerie::class);
-        $voucherSeries->setId(self::VOUCHER_SERIES_ID);
+        $voucherSeries->setId($seriesId);
         $voucherSeries->oxvoucherseries__oxshopid = new Field('1');
-        $voucherSeries->oxvoucherseries__oxdiscount = new Field(5);
+        $voucherSeries->oxvoucherseries__oxdiscount = new Field($discount);
         $voucherSeries->oxvoucherseries__oxdiscounttype = new Field('absolute');
         $voucherSeries->oxvoucherseries__oxbegindate = new Field($startDate);
         $voucherSeries->oxvoucherseries__oxenddate = new Field($endDate);
@@ -156,18 +177,12 @@ final class VouchersUserAndProductBindingTest extends BaseTestCase
         $voucherSeries->oxvoucherseries__oxcalculateonce = new Field('1');
         $voucherSeries->save();
     }
-    private function createVouchers(): void
+    private function addVoucherToSeries(string $voucherId, string $seriesId): void
     {
         $voucher = oxNew(Voucher::class);
-        $voucher->setId(self::FIRST_VOUCHER_ID);
-        $voucher->oxvouchers__oxvouchernr = new Field(self::FIRST_VOUCHER_ID);
-        $voucher->oxvouchers__oxvoucherserieid = new Field(self::VOUCHER_SERIES_ID);
-        $voucher->save();
-
-        $voucher = oxNew(Voucher::class);
-        $voucher->setId(self::SECOND_VOUCHER_ID);
-        $voucher->oxvouchers__oxvouchernr = new Field(self::SECOND_VOUCHER_ID);
-        $voucher->oxvouchers__oxvoucherserieid = new Field(self::VOUCHER_SERIES_ID);
+        $voucher->setId($voucherId);
+        $voucher->oxvouchers__oxvouchernr = new Field($voucherId);
+        $voucher->oxvouchers__oxvoucherserieid = new Field($seriesId);
         $voucher->save();
     }
 
@@ -217,28 +232,23 @@ final class VouchersUserAndProductBindingTest extends BaseTestCase
         return $user;
     }
 
-    private function assignVoucherSeriesToUserGroup(): void
+    private function assignVoucherSeriesToUserGroup(string $seriesId): void
     {
         $group = oxNew(Object2Group::class);
         $group->oxobject2group__oxid = substr_replace(Registry::getUtilsObject()->generateUId(), '_', 0, 1);
         $group->oxobject2group__oxshopid = 1;
-        $group->oxobject2group__oxobjectid = new Field(self::VOUCHER_SERIES_ID);
+        $group->oxobject2group__oxobjectid = new Field($seriesId);
         $group->oxobject2group__oxgroupsid = new Field(self::GROUP_ID);
         $group->save();
     }
 
-    /**
-     * @param string $voucherId
-     * @param string $articleId
-     *
-     */
-    private function assignVoucherToSpecificProduct(string $voucherId, string $articleId): void
+    private function assignVoucherToCategory(string $voucherId, string $categoryId): void
     {
         $object2Discount = oxNew(BaseModel::class);
         $object2Discount->init('oxobject2discount');
         $object2Discount->oxobject2discount__oxdiscountid = new Field($voucherId);
-        $object2Discount->oxobject2discount__oxobjectid = new Field($articleId);
-        $object2Discount->oxobject2discount__oxtype = new Field('oxarticles');
+        $object2Discount->oxobject2discount__oxobjectid = new Field($categoryId);
+        $object2Discount->oxobject2discount__oxtype = new Field('oxcategories');
 
         $object2Discount->save();
     }
@@ -249,5 +259,42 @@ final class VouchersUserAndProductBindingTest extends BaseTestCase
         $_POST['lgn_pwd'] = 'asdfasdf';
         $oCmpUser = oxNew('oxcmp_user');
         $oCmpUser->login();
+    }
+
+    private function createArticle(string $articleId, int $price): void
+    {
+        $oArticle = oxNew(Article::class);
+        $oArticle->setAdminMode(null);
+        $oArticle->setId($articleId);
+        $oArticle->oxarticles__oxprice = new Field($price);
+        $oArticle->oxarticles__oxshopid = new Field(1);
+        $oArticle->oxarticles__oxtitle = new Field("test");
+        $oArticle->save();
+    }
+
+    private function createCategory(string $categoryId, string $title): void
+    {
+        $category = oxNew(Category::class);
+        $category->setId($categoryId);
+        $category->oxcategories__oxparentid = new Field('oxrootid');
+        $category->oxcategories__oxrootid = new Field('_testCat');
+        $category->oxcategories__oxactive = new Field(1);
+        $category->oxcategories__oxhidden = new Field(0);
+        $category->oxcategories__oxpricefrom = new Field(99);
+        $category->oxcategories__oxshopid = new Field(Registry::getConfig()->getBaseShopId());
+        $category->oxcategories__oxtitle = new Field($title);
+        $category->save();
+    }
+
+    private function addArticleToCategory(string $articleId, string $categoryId): void
+    {
+        $category = oxNew(BaseModel::class);
+        $category->init('oxobject2category');
+        $category->setId(substr_replace(Registry::getUtilsObject()->generateUId(), '_', 0, 1));
+        $category->oxobject2category__oxobjectid = new Field($articleId);
+        $category->oxobject2category__oxcatnid = new Field($categoryId);
+        $category->oxobject2category__oxtime = new Field(time());
+
+        $category->save();
     }
 }

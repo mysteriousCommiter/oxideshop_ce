@@ -50,7 +50,7 @@ class Admin
         $this->shopId   = $shopId;
     }
 
-    public static function fromUser(
+    public static function fromUserInput(
         string $userId,
         UserNameValueObject $userName,
         PasswordValueObject $password,
@@ -62,7 +62,7 @@ class Admin
             throw new \InvalidArgumentException();
         }
 
-        if ($shopId > 0) {
+        if ($shopId <= 0) {
             throw new \InvalidArgumentException();
         }
 
@@ -75,43 +75,51 @@ class Admin
         );
     }
 
-    /**
-     * @return string
-     */
+    public static function fromDb(
+        string $userId,
+        UserNameValueObject $userName,
+        PasswordValueObject $password,
+        RightsValueObject $rights,
+        int $shopId
+    ): self {
+        return new self(
+            $userId,
+            $userName,
+            $password,
+            $rights,
+            $shopId
+        );
+    }
+
     public function getId(): string
     {
         return $this->id;
     }
 
-    /**
-     * @return UserNameValueObject
-     */
     public function getUserName(): UserNameValueObject
     {
         return $this->userName;
     }
 
-    /**
-     * @return PasswordValueObject
-     */
     public function getPassword(): PasswordValueObject
     {
         return $this->password;
     }
 
-    /**
-     * @return RightsValueObject
-     */
     public function getRights(): RightsValueObject
     {
         return $this->rights;
     }
 
-    /**
-     * @return int
-     */
     public function getShopId(): int
     {
         return $this->shopId;
+    }
+
+    public function withNewRights(RightsValueObject $rights): self
+    {
+        $admin = clone $this;
+        $admin->rights = $rights;
+        return $admin;
     }
 }

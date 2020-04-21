@@ -10,6 +10,11 @@ declare(strict_types=1);
 namespace OxidEsales\EshopCommunity\Internal\Domain\Admin\Dao;
 
 use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\Admin;
+use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\PasswordValueObject;
+use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\RightsValueObject;
+use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\UserNameValueObject;
+use OxidEsales\EshopCommunity\Internal\Domain\Admin\Exception\UserNotFoundException;
+use OxidEsales\EshopCommunity\Internal\Framework\Database\QueryBuilderFactoryInterface;
 
 class AdminDao implements AdminDaoInterface
 {
@@ -35,12 +40,20 @@ class AdminDao implements AdminDaoInterface
         $queryBuilder = $this->queryBuilderFactory->create();
         $queryBuilder
             ->insert('oxuser')
-            ->set('OXID', $admin->getId())
-            ->set('OXUSERNAME', $admin->getUserName())
-            ->set('OXPASSWORD', $admin->getPassword())
-            ->set('OXRIGHTS', $admin->getRights())
-            ->set('OXSHOPID', $admin->getShopId());
-
+            ->values([
+                'OXID'        => ':OXID',
+                'OXUSERNAME'  => ':OXUSERNAME',
+                'OXPASSWORD'  => ':OXPASSWORD',
+                'OXRIGHTS'    => ':OXRIGHTS',
+                'OXSHOPID'    => ':OXSHOPID',
+            ])
+            ->setParameters([
+                'OXID' => $admin->getId(),
+                'OXUSERNAME' => $admin->getUserName(),
+                'OXPASSWORD' => $admin->getPassword(),
+                'OXRIGHTS' => $admin->getRights(),
+                'OXSHOPID' => $admin->getShopId()
+            ]);
         $queryBuilder->execute();
     }
 
@@ -52,17 +65,44 @@ class AdminDao implements AdminDaoInterface
         $queryBuilder = $this->queryBuilderFactory->create();
         $queryBuilder
             ->update('oxuser')
-            ->set('OXUSERNAME', $admin->getUserName())
-            ->set('OXPASSWORD', $admin->getPassword())
-            ->set('OXRIGHTS', $admin->getRights())
-            ->set('OXSHOPID', $admin->getShopId())
+            ->set('OXUSERNAME', ':OXUSERNAME')
+            ->set('OXPASSWORD', ':OXPASSWORD')
+            ->set('OXRIGHTS', ':OXRIGHTS')
+            ->set('OXSHOPID', ':OXSHOPID')
             ->where('OXID = :OXID')
             ->setParameters([
-                OXID => $admin->getId()
+                'OXID' => $admin->getId(),
+                'OXUSERNAME' => $admin->getUserName(),
+                'OXPASSWORD' => $admin->getPassword(),
+                'OXRIGHTS' => $admin->getRights(),
+                'OXSHOPID' => $admin->getShopId()
             ]);
 
         $queryBuilder->execute();
     }
 
+    public function findByEmail(UserNameValueObject $email): Admin
+    {
+        $queryBuilder = $this->queryBuilderFactory->create();
+        $queryBuilder
+            ->select('OXID', 'OXUSERNAME', 'OXPASSWORD', 'OXRIGHTS', 'OXSHOPID')
+            ->from('oxuser')
+            ->where('OXUSERNAME LIKE :OXUSERNAME')
+            ->setParameters([
+                'OXUSERNAME' => $email
+            ]);
 
+        $result = $queryBuilder->execute()->fetch();
+        if (false === $result) {
+            throw UserNotFoundException::byEmail($email);
+        }
+
+        return Admin::fromDb(
+            $result['OXID'],
+            UserNameValueObject::fromDb($result['OXUSERNAME']),
+            PasswordValueObject::fromDb($result['OXPASSWORD']),
+            RightsValueObject::fromDb($result['OXRIGHTS']),
+            (int) $result['OXSHOPID']
+        );
+    }
 }

@@ -12,7 +12,7 @@ namespace OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject;
 use OxidEsales\EshopCommunity\Internal\Container\ContainerFactory;
 use OxidEsales\EshopCommunity\Internal\Domain\Authentication\Bridge\PasswordServiceBridgeInterface;
 
-class PasswordValueObject
+class Password
 {
     /**
      * @var string
@@ -26,6 +26,9 @@ class PasswordValueObject
 
     public static function fromUserInput(string $password): self
     {
+        if (strlen($password) == 0) {
+            throw new \InvalidArgumentException();
+        }
         $container = ContainerFactory::getInstance()->getContainer();
         $passwordHashService = $container->get(PasswordServiceBridgeInterface::class);
 

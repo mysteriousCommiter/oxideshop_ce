@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject;
 
-class RightsValueObject
+class Rights
 {
     public const MALL_ADMIN = 'malladmin';
 
@@ -25,7 +25,7 @@ class RightsValueObject
 
     public static function fromUserInput(string $rights): self
     {
-        if ($rights == self::MALL_ADMIN || is_numeric($rights)) {
+        if ($rights == self::MALL_ADMIN || (is_numeric($rights) && (int) $rights > 0)) {
             return new self($rights);
         }
         throw new \InvalidArgumentException();

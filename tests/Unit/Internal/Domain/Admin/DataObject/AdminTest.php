@@ -15,31 +15,41 @@ use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\Admin;
 use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\Password;
 use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\Rights;
 use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\UserName;
+use OxidEsales\EshopCommunity\Internal\Domain\Authentication\Bridge\PasswordServiceBridgeInterface;
+use OxidEsales\EshopCommunity\Tests\Integration\Internal\ContainerTrait;
 
 class AdminTest extends TestCase
 {
+    use ContainerTrait;
+
     public function testFromUserInput()
     {
+        $testPassword = 'somePassword';
+
         $admin = Admin::fromUserInput(
             '550e8400e29b11d4a716446655440000',
             UserName::fromUserInput('test@oxideshop.de'),
-            Password::fromUserInput('somePassword'),
+            Password::fromUserInput($testPassword),
             Rights::fromUserInput('malladmin'),
             1
         );
 
         $this->assertEquals('550e8400e29b11d4a716446655440000', $admin->getId());
         $this->assertEquals('test@oxideshop.de', $admin->getUserName());
-        $this->assertEquals('somePassword', $admin->getPassword());
+        $this->assertNotEquals($testPassword, $admin->getPassword());
         $this->assertEquals('malladmin', $admin->getRights());
         $this->assertEquals('1', $admin->getShopId());
+
+        $passwordServiceBridge = $this->get(PasswordServiceBridgeInterface::class);
+
+        $this->assertTrue($passwordServiceBridge->verifyPassword($testPassword, (string) $admin->getPassword()));
     }
 
     public function testFailsFromUserInput()
     {
         $this->expectException(InvalidArgumentException::class);
 
-        $admin = Admin::fromUserInput(
+        Admin::fromUserInput(
             '550e8400e29b11d4a716446655440000asdasdasd',
             UserName::fromUserInput('test@oxideshop.de'),
             Password::fromUserInput('somePassword'),
@@ -49,7 +59,7 @@ class AdminTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        $admin = Admin::fromUserInput(
+        Admin::fromUserInput(
             '550e8400e29b11d4a716446655440000',
             UserName::fromUserInput('test@oxideshop.de'),
             Password::fromUserInput('somePassword'),

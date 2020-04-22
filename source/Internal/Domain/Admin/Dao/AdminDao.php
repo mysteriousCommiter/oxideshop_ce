@@ -10,9 +10,9 @@ declare(strict_types=1);
 namespace OxidEsales\EshopCommunity\Internal\Domain\Admin\Dao;
 
 use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\Admin;
-use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\PasswordValueObject;
-use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\RightsValueObject;
-use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\UserNameValueObject;
+use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\Password;
+use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\Rights;
+use OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject\UserName;
 use OxidEsales\EshopCommunity\Internal\Domain\Admin\Exception\UserNotFoundException;
 use OxidEsales\EshopCommunity\Internal\Framework\Database\QueryBuilderFactoryInterface;
 
@@ -81,7 +81,7 @@ class AdminDao implements AdminDaoInterface
         $queryBuilder->execute();
     }
 
-    public function findByEmail(UserNameValueObject $email): Admin
+    public function findByEmail(UserName $email): Admin
     {
         $queryBuilder = $this->queryBuilderFactory->create();
         $queryBuilder
@@ -99,9 +99,9 @@ class AdminDao implements AdminDaoInterface
 
         return Admin::fromDb(
             $result['OXID'],
-            UserNameValueObject::fromDb($result['OXUSERNAME']),
-            PasswordValueObject::fromDb($result['OXPASSWORD']),
-            RightsValueObject::fromDb($result['OXRIGHTS']),
+            UserName::fromDb($result['OXUSERNAME']),
+            Password::fromDb($result['OXPASSWORD']),
+            Rights::fromDb($result['OXRIGHTS']),
             (int) $result['OXSHOPID']
         );
     }

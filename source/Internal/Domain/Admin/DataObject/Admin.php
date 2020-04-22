@@ -17,17 +17,17 @@ class Admin
     private $id;
 
     /**
-     * @var UserNameValueObject
+     * @var UserName
      */
     private $userName;
 
     /**
-     * @var PasswordValueObject
+     * @var Password
      */
     private $password;
 
     /**
-     * @var RightsValueObject
+     * @var Rights
      */
     private $rights;
 
@@ -38,9 +38,9 @@ class Admin
 
     private function __construct(
         $id,
-        UserNameValueObject $userName,
-        PasswordValueObject $password,
-        RightsValueObject $rights,
+        UserName $userName,
+        Password $password,
+        Rights $rights,
         int $shopId
     ) {
         $this->id   = $id;
@@ -52,9 +52,9 @@ class Admin
 
     public static function fromUserInput(
         string $userId,
-        UserNameValueObject $userName,
-        PasswordValueObject $password,
-        RightsValueObject $rights,
+        UserName $userName,
+        Password $password,
+        Rights $rights,
         int $shopId
     ): self {
 
@@ -77,9 +77,9 @@ class Admin
 
     public static function fromDb(
         string $userId,
-        UserNameValueObject $userName,
-        PasswordValueObject $password,
-        RightsValueObject $rights,
+        UserName $userName,
+        Password $password,
+        Rights $rights,
         int $shopId
     ): self {
         return new self(
@@ -96,17 +96,17 @@ class Admin
         return $this->id;
     }
 
-    public function getUserName(): UserNameValueObject
+    public function getUserName(): UserName
     {
         return $this->userName;
     }
 
-    public function getPassword(): PasswordValueObject
+    public function getPassword(): Password
     {
         return $this->password;
     }
 
-    public function getRights(): RightsValueObject
+    public function getRights(): Rights
     {
         return $this->rights;
     }
@@ -116,7 +116,7 @@ class Admin
         return $this->shopId;
     }
 
-    public function withNewRights(RightsValueObject $rights): self
+    public function withNewRights(Rights $rights): self
     {
         $admin = clone $this;
         $admin->rights = $rights;

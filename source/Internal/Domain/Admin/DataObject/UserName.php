@@ -11,7 +11,7 @@ namespace OxidEsales\EshopCommunity\Internal\Domain\Admin\DataObject;
 
 use OxidEsales\EshopCommunity\Internal\Domain\Email\EmailValidatorService;
 
-class UserNameValueObject
+class UserName
 {
     /**
      * @var string
